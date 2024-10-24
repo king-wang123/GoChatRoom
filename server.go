@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"sync"
@@ -42,6 +43,25 @@ func (this *Server) Broadcast(user *User, message string) {
 	this.Message <- sendMsg
 }
 
+func (this *Server) ReadMessage(user *User, conn net.Conn) {
+	// read message from client
+	buf := make([]byte, 1024)
+	for {
+		n, err := conn.Read(buf)
+		if err != nil && err == io.EOF {
+			fmt.Println("Conn Read err:", err)
+			return
+		} else if n == 0 {
+			this.Broadcast(user, "has left the chat")
+			return
+		} else {
+			msg := string(buf[:n-1])
+			this.Broadcast(user, msg)
+		}
+
+	}
+}
+
 func (this *Server) Handler(conn net.Conn) {
 	//fmt.Println("Successfully established connection")
 	user := NewUser(conn)
@@ -52,6 +72,10 @@ func (this *Server) Handler(conn net.Conn) {
 	this.mapLock.Unlock()
 	// broadcast message
 	this.Broadcast(user, "has joined the chat")
+	go this.ListenBroadcast()
+
+	// read message
+	go this.ReadMessage(user, conn)
 
 	// block the handler
 	select {}
