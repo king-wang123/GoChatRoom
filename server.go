@@ -52,11 +52,11 @@ func (this *Server) ReadMessage(user *User, conn net.Conn) {
 			fmt.Println("Conn Read err:", err)
 			return
 		} else if n == 0 {
-			this.Broadcast(user, "has left the chat")
+			user.Offline()
 			return
 		} else {
 			msg := string(buf[:n-1])
-			this.Broadcast(user, msg)
+			user.DoMessage(msg)
 		}
 
 	}
@@ -64,15 +64,8 @@ func (this *Server) ReadMessage(user *User, conn net.Conn) {
 
 func (this *Server) Handler(conn net.Conn) {
 	//fmt.Println("Successfully established connection")
-	user := NewUser(conn)
-
-	// add user to online map
-	this.mapLock.Lock()
-	this.OnlineMap[user.Name] = user
-	this.mapLock.Unlock()
-	// broadcast message
-	this.Broadcast(user, "has joined the chat")
-	go this.ListenBroadcast()
+	user := NewUser(conn, this)
+	user.Online()
 
 	// read message
 	go this.ReadMessage(user, conn)
