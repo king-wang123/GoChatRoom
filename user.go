@@ -53,6 +53,19 @@ func (this *User) DoMessage(msg string) {
 			this.Send(onlineMsg)
 		}
 		this.server.mapLock.Unlock()
+	} else if len(msg) > 8 && msg[:8] == "$rename|" {
+		newName := msg[8:]
+		_, ok := this.server.OnlineMap[newName]
+		if ok {
+			this.Send("This name is already taken, please choose another one.\n")
+		} else {
+			this.server.mapLock.Lock()
+			delete(this.server.OnlineMap, this.Name)
+			this.Name = newName
+			this.server.OnlineMap[this.Name] = this
+			this.server.mapLock.Unlock()
+			this.Send("Your name has been changed to " + newName + "\n")
+		}
 	} else {
 		this.server.Broadcast(this, msg)
 	}
