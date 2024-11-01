@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -43,35 +44,46 @@ func (this *Server) Broadcast(user *User, message string) {
 	this.Message <- sendMsg
 }
 
-func (this *Server) ReadMessage(user *User, conn net.Conn) {
-	// read message from client
-	buf := make([]byte, 1024)
-	for {
-		n, err := conn.Read(buf)
-		if err != nil && err == io.EOF {
-			fmt.Println("Conn Read err:", err)
-			return
-		} else if n == 0 {
-			user.Offline()
-			return
-		} else {
-			msg := string(buf[:n-1])
-			user.DoMessage(msg)
-		}
-
-	}
-}
-
 func (this *Server) Handler(conn net.Conn) {
 	//fmt.Println("Successfully established connection")
 	user := NewUser(conn, this)
 	user.Online()
 
+	isAlive := make(chan bool)
 	// read message
-	go this.ReadMessage(user, conn)
+	go func() {
+		// read message from client
+		buf := make([]byte, 1024)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil && err == io.EOF {
+				fmt.Println("Conn Read err:", err)
+				return
+			} else if n == 0 {
+				user.Offline()
+				return
+			} else {
+				msg := string(buf[:n-1])
+				user.DoMessage(msg)
+
+				isAlive <- true
+			}
+		}
+	}()
 
 	// block the handler
-	select {}
+	for {
+		select {
+		case <-isAlive:
+			continue
+		case <-time.After(time.Second * 10):
+			user.Send("You got kicked out due to inactivity.")
+			close(user.C)
+			conn.Close()
+			return
+		}
+	}
+
 }
 
 // Start server
